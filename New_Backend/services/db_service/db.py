@@ -1,6 +1,7 @@
 """
 Database service for message logging and retrieval.
-Functions: log_message (create), get_message_by_id (read by ID), get_messages_by_employee (read by employee), get_messages_by_status (read by status), get_messages_by_session (read by session), get_all_messages (read all), update_message_status (update status), update_message_response (update response), delete_message (delete), get_message_count (count total)
+Status values: ACCEPT, FLAG, BLOCK
+Functions: log_message (create), get_message_by_id (read by ID), get_messages_by_employee (read by employee), get_messages_by_status (read by status), get_messages_by_session (read by session), get_all_messages (read all), get_training_data (get untrained messages as {text, status}), mark_as_trained (mark messages as trained), update_message_status (update status), update_message_response (update response), delete_message (delete), get_message_count (count total)
 """
 import sys
 from pathlib import Path
@@ -18,9 +19,9 @@ from database.connection import get_database
 
 async def log_message(
     employee_id: str,
-    prompt: str,
+    text: str,
     response: Optional[str] = None,
-    status: str = "SAFE",
+    status: str = "ACCEPT",
     session_id: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None
 ) -> str:
@@ -29,9 +30,9 @@ async def log_message(
     
     Args:
         employee_id: The ID of the employee
-        prompt: The user's prompt/query
+        text: The user's prompt/message text
         response: The AI response (optional)
-        status: Message status (SAFE, FLAG, BLOCKED)
+        status: Message status (ACCEPT, FLAG, BLOCK)
         session_id: Optional session identifier
         metadata: Additional metadata dictionary
         
@@ -44,11 +45,12 @@ async def log_message(
     now = datetime.utcnow()
     message_doc = {
         "employee_id": employee_id,
-        "prompt": prompt,
+        "text": text,
         "response": response,
         "status": status,
         "session_id": session_id,
         "metadata": metadata or {},
+        "is_trained": False,
         "created_at": now,
         "updated_at": now
     }
@@ -118,7 +120,7 @@ async def get_messages_by_status(
     Retrieve all messages with a specific status.
     
     Args:
-        status: The status to filter by (SAFE, FLAG, BLOCKED)
+        status: The status to filter by (ACCEPT, FLAG, BLOCK)
         limit: Maximum number of messages to return
         skip: Number of messages to skip (for pagination)
         
@@ -198,7 +200,7 @@ async def update_message_status(message_id: str, status: str) -> bool:
     
     Args:
         message_id: The message ID to update
-        status: The new status (SAFE, FLAG, BLOCKED)
+        status: The new status (ACCEPT, FLAG, BLOCK)
         
     Returns:
         True if updated successfully, False otherwise
@@ -275,4 +277,115 @@ async def get_message_count() -> int:
     messages_collection = db["messages"]
     
     return await messages_collection.count_documents({})
+
+
+async def get_training_data(
+    employee_id: Optional[str] = None,
+    status: Optional[str] = None,
+    session_id: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0
+) -> List[Dict[str, str]]:
+    """
+    Get untrained messages in simplified format: {text: "...", status: "..."}
+    Only returns messages where is_trained is False or doesn't exist.
+    
+    Args:
+        employee_id: Optional employee ID to filter by
+        status: Optional status to filter by (ACCEPT, FLAG, BLOCK)
+        session_id: Optional session ID to filter by
+        limit: Maximum number of messages to return
+        skip: Number of messages to skip (for pagination)
+        
+    Returns:
+        List of message dictionaries with only text and status fields
+    """
+    db = await get_database()
+    messages_collection = db["messages"]
+    
+    # Build query filter - only get untrained messages
+    query_filter = {
+        "$or": [
+            {"is_trained": False},
+            {"is_trained": {"$exists": False}}
+        ]
+    }
+    
+    if employee_id:
+        query_filter["employee_id"] = employee_id
+    if status:
+        query_filter["status"] = status
+    if session_id:
+        query_filter["session_id"] = session_id
+    
+    # Query with projection to only get text and status
+    cursor = messages_collection.find(
+        query_filter,
+        {"text": 1, "status": 1, "_id": 0}
+    ).sort("created_at", -1).skip(skip).limit(limit)
+    
+    messages = await cursor.to_list(length=limit)
+    
+    return messages
+
+
+async def mark_as_trained(
+    employee_id: Optional[str] = None,
+    status: Optional[str] = None,
+    session_id: Optional[str] = None,
+    message_ids: Optional[List[str]] = None
+) -> int:
+    """
+    Mark messages as trained (is_trained = True).
+    
+    Args:
+        employee_id: Optional - mark all messages for this employee
+        status: Optional - mark all messages with this status
+        session_id: Optional - mark all messages in this session
+        message_ids: Optional - mark specific messages by ID
+        
+    Returns:
+        Number of messages marked as trained
+        
+    Note: If no filters provided, does nothing for safety
+    """
+    db = await get_database()
+    messages_collection = db["messages"]
+    
+    # Build query filter
+    query_filter = {}
+    
+    if message_ids:
+        # Mark specific messages by ID
+        query_filter["_id"] = {"$in": [ObjectId(id) for id in message_ids]}
+    else:
+        # Build filter from other parameters
+        if employee_id:
+            query_filter["employee_id"] = employee_id
+        if status:
+            query_filter["status"] = status
+        if session_id:
+            query_filter["session_id"] = session_id
+    
+    # Safety check - don't mark everything as trained without filters
+    if not query_filter:
+        return 0
+    
+    # Only mark untrained messages
+    query_filter["$or"] = [
+        {"is_trained": False},
+        {"is_trained": {"$exists": False}}
+    ]
+    
+    result = await messages_collection.update_many(
+        query_filter,
+        {
+            "$set": {
+                "is_trained": True,
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    return result.modified_count
 

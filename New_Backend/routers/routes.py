@@ -62,7 +62,7 @@ async def process_prompt_from_local_agent(request: LocalAgentRequest):
             try:
                 await log_message(
                     employee_id=request.employee_id,
-                    prompt=request.prompt,
+                    text=request.prompt,
                     response=result.final_response,
                     status=result.status,
                     session_id=request.session_id,
