@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from local_agent import dertMisuseModel
 
 # Load environment variables from .env file before anything else
 load_dotenv()
@@ -83,12 +84,13 @@ You must only return a valid JSON object."""
         async with httpx.AsyncClient() as client:
             for attempt in range(max_retries):
                 try:
-                    response = await client.post(self.api_url, json=payload, timeout=45.0)
-                    response.raise_for_status()
+                    dert = dertMisuseModel(query)
+                    
+                    #response.raise_for_status()
                     
                     # The API returns a JSON object which has a text field containing the JSON string.
                     response_data = response.json()
-                    json_text = response_data['candidates'][0]['content']['parts'][0]['text']
+                    json_text = response
                     return json.loads(json_text)
 
                 except httpx.HTTPStatusError as e:
