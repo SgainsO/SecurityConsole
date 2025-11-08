@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
@@ -14,6 +15,12 @@ load_dotenv()
 
 # --- Configuration ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL_1 = "openai/gpt-4.1-nano"
+OPENROUTER_MODEL_2 = "anthropic/claude-3-haiku"
+OPENROUTER_EMBEDDING_MODEL = "qwen/qwen3-embedding-0.6b"
+CONSENSUS_SIMILARITY_TOLERANCE = 0.1
+
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
@@ -44,7 +51,7 @@ class ToolkitResponse(BaseModel):
     discrepancy_report: Optional[DiscrepancyReport] = None
 
 
-# --- Gemini Client (Official SDK) ---
+# --- LLM Clients ---
 class GeminiClient:
     def __init__(self, api_key: str):
         self.client = genai.Client(api_key=api_key)
@@ -69,19 +76,34 @@ Analyze the user prompt below and return JSON with:
 
 Prompt: "{prompt}"
 """
-
-        # Gemini SDK call
         response = self.client.models.generate_content(
             model="gemini-2.5-flash",
             contents=system_prompt
         )
 
-        # Try parsing response as JSON
+        raw_text = response.text
         try:
-            expert_json = json.loads(response.text)
-            return expert_json
-        except json.JSONDecodeError:
-            print("Gemini did not return valid JSON. Defaulting to ACCEPT for safety.")
+            # Find the start and end of the JSON object to strip markdown
+            json_start = raw_text.find('{')
+            json_end = raw_text.rfind('}') + 1
+
+            if json_start == -1 or json_end == 0:
+                raise json.JSONDecodeError("No JSON object found in response", raw_text, 0)
+
+            json_str = raw_text[json_start:json_end]
+            
+            # Use a local Pydantic model for validation as you suggested
+            class Opinion(BaseModel):
+                pii_status: str
+                slm_flag: str
+                malicious_flag: str
+            
+            opinion = Opinion.parse_raw(json_str)
+            return opinion.dict()
+
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Could not parse JSON from Gemini response: {e}")
+            print(f"Raw response was: {raw_text}")
             return {"pii_status": "ACCEPT", "slm_flag": "ACCEPT", "malicious_flag": "ACCEPT"}
 
     async def get_llm_response(self, prompt: str) -> str:
@@ -96,28 +118,66 @@ Prompt: "{prompt}"
         )
         return response.text
 
-    async def get_embeddings(self, texts: List[str]) -> np.ndarray:
-        """Get embeddings for text using gemini-embedding-001."""
-        embeddings = []
-        for text in texts:
-            result = self.client.models.embed_content(
-                model="gemini-embedding-001",
-                contents=text
+async def get_openrouter_response(prompt: str, model: str) -> str:
+    if not OPENROUTER_API_KEY:
+        print(f"Warning: OPENROUTER_API_KEY not set. Cannot call model {model}.")
+        return f"Error: OpenRouter API key not configured."
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+                json={"model": model, "messages": [{"role": "user", "content": prompt}]},
+                timeout=90.0
             )
-            embeddings.append(result.embedding.values)
-        return np.array(embeddings)
+            response.raise_for_status()
+            data = response.json()
+            return data['choices'][0]['message']['content']
+        except (httpx.RequestError, httpx.HTTPStatusError, KeyError, IndexError) as e:
+            print(f"Error calling OpenRouter for model {model}: {e}")
+            return f"Error: Could not get response from {model}."
+
+async def get_openrouter_embeddings(texts: List[str], model: str) -> np.ndarray:
+    if not OPENROUTER_API_KEY:
+        raise ValueError("OpenRouter API key not configured for embeddings.")
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                url="https://openrouter.ai/api/v1/embeddings",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": model,
+                    "input": texts,
+                    "encoding_format": "float"
+                },
+                timeout=60.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            sorted_embeddings = sorted(data['data'], key=lambda e: e['index'])
+            return np.array([item['embedding'] for item in sorted_embeddings])
+        except (httpx.RequestError, httpx.HTTPStatusError, KeyError, IndexError) as e:
+            print(f"Error calling OpenRouter for embeddings model {model}: {e}")
+            raise
 
 
 # --- Hallucination Detector ---
 class HallucinationDetector:
-    def __init__(self, gemini_client: GeminiClient):
-        self.gemini_client = gemini_client
-        print("HallucinationDetector initialized with Gemini embeddings.")
+    def __init__(self):
+        print("HallucinationDetector initialized to use OpenRouter embeddings.")
 
-    async def check(self, r0: str, r1: str, r2: str, threshold: float = 0.9) -> bool:
+    async def check(self, r0: str, r1: str, r2: str, threshold: float = 0.75) -> bool:
         """Return True if hallucination suspected."""
         try:
-            embeddings = await self.gemini_client.get_embeddings([r0, r1, r2])
+            embeddings = await get_openrouter_embeddings(
+                [r0, r1, r2],
+                model=OPENROUTER_EMBEDDING_MODEL
+            )
         except Exception as e:
             print(f"Embedding fetch failed ({e}); assuming hallucination.")
             return True
@@ -125,12 +185,17 @@ class HallucinationDetector:
         sim_01 = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
         sim_02 = cosine_similarity([embeddings[0]], [embeddings[2]])[0][0]
         print(f"Cosine Similarities: R0-R1={sim_01:.3f}, R0-R2={sim_02:.3f}")
-        return not (sim_01 > threshold and sim_02 > threshold)
+        
+        # Flag as hallucination if the difference between the two scores is too large.
+        if abs(sim_01 - sim_02) > CONSENSUS_SIMILARITY_TOLERANCE:
+            print(f"Flagging hallucination due to lack of consensus (score difference > {CONSENSUS_SIMILARITY_TOLERANCE})")
+            return True
 
+        return False
 
 # --- Global Instances ---
 gemini_client = GeminiClient(api_key=GEMINI_API_KEY)
-hallucination_detector = HallucinationDetector(gemini_client=gemini_client)
+hallucination_detector = HallucinationDetector()
 
 
 @app.on_event("startup")
@@ -174,8 +239,8 @@ async def process_prompt(request: ToolkitRequest):
         print("Generating responses for hallucination check...")
         r0, r1, r2 = await asyncio.gather(
             gemini_client.get_llm_response(request.prompt),
-            gemini_client.get_llm_response(request.prompt),
-            gemini_client.get_llm_response(request.prompt)
+            get_openrouter_response(request.prompt, model=OPENROUTER_MODEL_1),
+            get_openrouter_response(request.prompt, model=OPENROUTER_MODEL_2)
         )
 
         is_hallucinated = await hallucination_detector.check(r0, r1, r2)
