@@ -10,7 +10,7 @@ new_backend_dir = current_dir.parent
 sys.path.insert(0, str(new_backend_dir))
 
 from services.cloud_agent.agent import process_prompt, ToolkitResponse, DiscrepancyReport
-from services.db_service.db import log_message
+from services.logger.logger import log_incident
 from config.config import settings
 
 
@@ -57,10 +57,10 @@ async def process_prompt_from_local_agent(request: LocalAgentRequest):
             malicious_flag=request.malicious_flag
         )
         
-        # Log the message to database
+        # Log the incident to database
         if request.employee_id:
             try:
-                await log_message(
+                await log_incident(
                     employee_id=request.employee_id,
                     text=request.prompt,
                     response=result.final_response,
@@ -75,7 +75,7 @@ async def process_prompt_from_local_agent(request: LocalAgentRequest):
                     }
                 )
             except Exception as log_error:
-                print(f"Warning: Failed to log message to database: {log_error}")
+                print(f"Warning: Failed to log incident to database: {log_error}")
         
         # Return the agent response
         return result
