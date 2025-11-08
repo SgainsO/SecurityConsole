@@ -3,23 +3,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from database.connection import connect_to_mongo, close_mongo_connection
-from routers import message_routes
+from routers.routes import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    # Startup
+    print("Starting New Backend API...")
     await connect_to_mongo()
+    print("Connected to MongoDB")
+    
     yield
+    
+    # Shutdown
+    print("Shutting down...")
     await close_mongo_connection()
+    print("MongoDB connection closed")
 
 
 app = FastAPI(
-    title="Security Console API",
-    description="API for monitoring employee LLM messages with review and flagging system",
-    version="2.0.0",
+    title="Security Console - New Backend API",
+    description="Backend API for processing prompts through the security agent and logging to database",
+    version="1.0.0",
     lifespan=lifespan
 )
 
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,14 +38,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(message_routes.router)
+# Include routers
+app.include_router(router)
 
 
 @app.get("/")
 async def root():
-    return {"message": "Security Console API", "status": "running"}
+    """Root endpoint."""
+    return {
+        "message": "Security Console - New Backend API",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
 
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
