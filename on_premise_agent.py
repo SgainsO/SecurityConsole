@@ -98,9 +98,9 @@ You must only return a valid JSON object."""
                                       {"slm_flag": llam["data"], "malicious_flag": dert["data"]},
                                         "required": ["slm_flag", "malicious_flag"]}
                     # The API returns a JSON object which has a text field containing the JSON string.
-                    response_data = response.json()
-                    json_text = response
-                    return json.loads(json_text)
+                   # response_data = response.json()
+                   # json_text = response
+                    return json.loads(response_data)
 
                 except httpx.HTTPStatusError as e:
                     print(f"Attempt {attempt + 1} failed with status {e.response.status_code}: {e.response.text}")
