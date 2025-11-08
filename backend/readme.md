@@ -1,1 +1,0 @@
-export OPENROUTER_API_KEY="your-openrouter-key"
