@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from config import settings
+from config.config import settings
 
 
 class Database:
@@ -9,14 +9,14 @@ class Database:
 db = Database()
 
 
+# Retrieve Database client
 async def get_database():
-    return db.client[settings.database_name]
+    return db.client[settings.DATABASE_NAME]
 
-
+# Establish connection to database client
 async def connect_to_mongo():
-    db.client = AsyncIOMotorClient(settings.mongodb_uri)
+    db.client = AsyncIOMotorClient(settings.MONGODB_STRING)
     
-
+# Close mongodb connection
 async def close_mongo_connection():
     db.client.close()
-
