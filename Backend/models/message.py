@@ -60,3 +60,19 @@ class ReviewMessageRequest(BaseModel):
     needs_review: bool
     reviewed_by: str
 
+
+class BulkFlagRequest(BaseModel):
+    message_ids: list[str]
+    is_flagged: bool
+    flag_reason: Optional[str] = None
+    reviewed_by: str
+
+
+class FlagStatistics(BaseModel):
+    total_messages: int
+    flagged_messages: int
+    needs_review: int
+    flagged_percentage: float
+    top_flagged_employees: list[dict]
+    recent_flags: list[dict]
+

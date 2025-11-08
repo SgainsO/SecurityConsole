@@ -148,6 +148,39 @@ def test_filter_messages():
     return response.json()
 
 
+def test_bulk_flag_messages(message_ids):
+    payload = {
+        "message_ids": message_ids,
+        "is_flagged": True,
+        "flag_reason": "Bulk flagged for security review - multiple credential attempts",
+        "reviewed_by": "security_team"
+    }
+    
+    response = requests.post(f"{API_ENDPOINT}/flag/bulk", json=payload)
+    print_response(response, f"Bulk Flag {len(message_ids)} Messages")
+    return response.json()
+
+
+def test_unflag_message(message_id):
+    response = requests.post(
+        f"{API_ENDPOINT}/{message_id}/unflag?reviewed_by=manager_001"
+    )
+    print_response(response, f"Unflag Message: {message_id}")
+    return response.json()
+
+
+def test_get_flagged_by_employee(employee_id):
+    response = requests.get(f"{API_ENDPOINT}/flagged/employee/{employee_id}")
+    print_response(response, f"Get Flagged Messages for Employee: {employee_id}")
+    return response.json()
+
+
+def test_get_flag_analytics():
+    response = requests.get(f"{API_ENDPOINT}/analytics/flags")
+    print_response(response, "Flag Analytics & Statistics")
+    return response.json()
+
+
 def test_update_message(message_id):
     payload = {
         "response": "Updated response after review",
@@ -193,8 +226,11 @@ def run_all_tests():
     test_get_session_messages(session_id)
     
     print("\n--- Testing Review & Flagging System ---")
+    message_ids_to_bulk_flag = []
+    
     if msg2 and "id" in msg2:
         test_flag_message(msg2["id"])
+        message_ids_to_bulk_flag.append(msg2["id"])
         
         test_mark_for_review(msg2["id"])
         
@@ -202,8 +238,20 @@ def run_all_tests():
     
     if msg1 and "id" in msg1:
         test_mark_for_review(msg1["id"])
+        message_ids_to_bulk_flag.append(msg1["id"])
         
         test_complete_review(msg1["id"])
+    
+    print("\n--- Testing Enhanced Flagging Features ---")
+    if len(message_ids_to_bulk_flag) >= 2:
+        test_bulk_flag_messages(message_ids_to_bulk_flag)
+    
+    if msg1 and "id" in msg1:
+        test_unflag_message(msg1["id"])
+    
+    test_get_flagged_by_employee("emp_002")
+    
+    test_get_flag_analytics()
     
     print("\n--- Testing Filter Endpoints ---")
     test_get_flagged_messages()
@@ -220,6 +268,9 @@ def run_all_tests():
     print("✓ Session-based message tracking")
     print("✓ Employee and session filtering")
     print("✓ Flagging system for security concerns")
+    print("✓ Bulk flagging for multiple messages")
+    print("✓ Unflagging capability")
+    print("✓ Flag analytics and statistics")
     print("✓ Review workflow for employers")
     print("✓ Message metadata and updates")
 
