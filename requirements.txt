@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
-presidio-analyzer[en]
 httpx
 python-dotenv
 google-genai
+presidio-analyzer[en]
+torch

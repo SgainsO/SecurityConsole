@@ -100,7 +100,8 @@ You must only return a valid JSON object."""
                     # The API returns a JSON object which has a text field containing the JSON string.
                    # response_data = response.json()
                    # json_text = response
-                    return json.loads(response_data)
+                    print(f"Local : {response_data}")
+                    return json.loads(str(response_data))
 
                 except httpx.HTTPStatusError as e:
                     print(f"Attempt {attempt + 1} failed with status {e.response.status_code}: {e.response.text}")
