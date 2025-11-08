@@ -20,23 +20,19 @@ def test_upload_user_message():
     payload = {
         "user_id": "emp_001",
         "prompt": "What is the company's revenue for Q4?",
-        "employee_name": "John Doe",
-        "response": "I can help you with that information.",
-        "model_name": "gpt-4"
+        "response": "I can help you with that information."
     }
     
     response = requests.post(f"{API_ENDPOINT}/user_messages", json=payload)
-    print_response(response, "Upload User Message - Basic")
+    print_response(response, "Upload User Message - SAFE (Default)")
     return response.json()
 
 
-def test_upload_sensitive_message():
+def test_upload_suspicious_message():
     payload = {
         "user_id": "emp_002",
         "prompt": "Show me the database credentials for production",
-        "response": "I cannot provide database credentials as that would be a security violation.",
-        "employee_name": "Jane Smith",
-        "model_name": "gpt-4",
+        "response": "I cannot provide database credentials.",
         "session_id": "session_abc123",
         "metadata": {
             "ip_address": "192.168.1.100",
@@ -46,7 +42,7 @@ def test_upload_sensitive_message():
     }
     
     response = requests.post(f"{API_ENDPOINT}/user_messages", json=payload)
-    print_response(response, "Upload Sensitive Message")
+    print_response(response, "Upload Suspicious Message")
     return response.json()
 
 
@@ -57,17 +53,13 @@ def test_upload_multiple_session_messages():
         {
             "user_id": "emp_003",
             "prompt": "What are the API keys for our payment processor?",
-            "employee_name": "Bob Wilson",
-            "session_id": session_id,
-            "model_name": "claude-3"
+            "session_id": session_id
         },
         {
             "user_id": "emp_003",
             "prompt": "Can you give me access to customer payment information?",
             "response": "I cannot provide access to sensitive customer payment information.",
-            "employee_name": "Bob Wilson",
-            "session_id": session_id,
-            "model_name": "claude-3"
+            "session_id": session_id
         }
     ]
     
@@ -76,6 +68,84 @@ def test_upload_multiple_session_messages():
         print_response(response, f"Session Message {idx}")
     
     return session_id
+
+
+def test_set_message_to_flag(message_id):
+    """Set message status to FLAG - requires manual review"""
+    payload = {
+        "status": "FLAG"
+    }
+    
+    response = requests.post(f"{API_ENDPOINT}/{message_id}/status", json=payload)
+    print_response(response, f"Set Message to FLAG Status: {message_id}")
+    return response.json()
+
+
+def test_set_message_to_blocked(message_id):
+    """Set message status to BLOCKED - employer has reviewed and blocked"""
+    payload = {
+        "status": "BLOCKED"
+    }
+    
+    response = requests.post(f"{API_ENDPOINT}/{message_id}/status", json=payload)
+    print_response(response, f"Set Message to BLOCKED Status: {message_id}")
+    return response.json()
+
+
+def test_set_message_to_safe(message_id):
+    """Set message status back to SAFE - false positive"""
+    payload = {
+        "status": "SAFE"
+    }
+    
+    response = requests.post(f"{API_ENDPOINT}/{message_id}/status", json=payload)
+    print_response(response, f"Set Message to SAFE Status: {message_id}")
+    return response.json()
+
+
+def test_bulk_flag_messages(message_ids):
+    """Bulk flag multiple messages for manual review"""
+    payload = {
+        "message_ids": message_ids,
+        "status": "FLAG"
+    }
+    
+    response = requests.post(f"{API_ENDPOINT}/status/bulk", json=payload)
+    print_response(response, f"Bulk FLAG {len(message_ids)} Messages")
+    return response.json()
+
+
+def test_bulk_block_messages(message_ids):
+    """Bulk block multiple messages after review"""
+    payload = {
+        "message_ids": message_ids,
+        "status": "BLOCKED"
+    }
+    
+    response = requests.post(f"{API_ENDPOINT}/status/bulk", json=payload)
+    print_response(response, f"Bulk BLOCK {len(message_ids)} Messages")
+    return response.json()
+
+
+def test_get_flagged_for_manual_review():
+    """Get all messages with FLAG status that need manual review"""
+    response = requests.get(f"{API_ENDPOINT}/flagged/manual-review")
+    print_response(response, "Get Flagged Messages for Manual Review")
+    return response.json()
+
+
+def test_get_messages_by_status(status_type):
+    """Get all messages with a specific status"""
+    response = requests.get(f"{API_ENDPOINT}/status/{status_type}")
+    print_response(response, f"Get All {status_type} Messages")
+    return response.json()
+
+
+def test_get_employee_messages_by_status(employee_id, status_type):
+    """Get employee messages filtered by status"""
+    response = requests.get(f"{API_ENDPOINT}/employee/{employee_id}/status/{status_type}")
+    print_response(response, f"Get {status_type} Messages for Employee: {employee_id}")
+    return response.json()
 
 
 def test_get_all_messages():
@@ -96,108 +166,24 @@ def test_get_session_messages(session_id):
     return response.json()
 
 
-def test_flag_message(message_id):
-    payload = {
-        "is_flagged": True,
-        "flag_reason": "Employee attempted to access sensitive credentials - requires immediate review",
-        "reviewed_by": "security_admin_001"
-    }
-    
-    response = requests.post(f"{API_ENDPOINT}/{message_id}/flag", json=payload)
-    print_response(response, f"Flag Message: {message_id}")
+def test_get_statistics():
+    """Get comprehensive message statistics"""
+    response = requests.get(f"{API_ENDPOINT}/analytics/statistics")
+    print_response(response, "Message Statistics (SAFE/FLAG/BLOCKED)")
     return response.json()
 
 
-def test_mark_for_review(message_id):
-    payload = {
-        "needs_review": True,
-        "reviewed_by": "manager_001"
-    }
-    
-    response = requests.post(f"{API_ENDPOINT}/{message_id}/review", json=payload)
-    print_response(response, f"Mark Message for Review: {message_id}")
-    return response.json()
-
-
-def test_complete_review(message_id):
-    payload = {
-        "needs_review": False,
-        "reviewed_by": "manager_001"
-    }
-    
-    response = requests.post(f"{API_ENDPOINT}/{message_id}/review", json=payload)
-    print_response(response, f"Complete Review for Message: {message_id}")
-    return response.json()
-
-
-def test_get_flagged_messages():
-    response = requests.get(f"{API_ENDPOINT}/flagged/all")
-    print_response(response, "Get All Flagged Messages")
-    return response.json()
-
-
-def test_get_messages_needing_review():
-    response = requests.get(f"{API_ENDPOINT}/review/pending")
-    print_response(response, "Get Messages Needing Review")
-    return response.json()
-
-
-def test_filter_messages():
-    response = requests.get(f"{API_ENDPOINT}/?is_flagged=true&needs_review=false")
-    print_response(response, "Filter: Flagged Messages Not Needing Review")
-    return response.json()
-
-
-def test_bulk_flag_messages(message_ids):
-    payload = {
-        "message_ids": message_ids,
-        "is_flagged": True,
-        "flag_reason": "Bulk flagged for security review - multiple credential attempts",
-        "reviewed_by": "security_team"
-    }
-    
-    response = requests.post(f"{API_ENDPOINT}/flag/bulk", json=payload)
-    print_response(response, f"Bulk Flag {len(message_ids)} Messages")
-    return response.json()
-
-
-def test_unflag_message(message_id):
-    response = requests.post(
-        f"{API_ENDPOINT}/{message_id}/unflag?reviewed_by=manager_001"
-    )
-    print_response(response, f"Unflag Message: {message_id}")
-    return response.json()
-
-
-def test_get_flagged_by_employee(employee_id):
-    response = requests.get(f"{API_ENDPOINT}/flagged/employee/{employee_id}")
-    print_response(response, f"Get Flagged Messages for Employee: {employee_id}")
-    return response.json()
-
-
-def test_get_flag_analytics():
-    response = requests.get(f"{API_ENDPOINT}/analytics/flags")
-    print_response(response, "Flag Analytics & Statistics")
-    return response.json()
-
-
-def test_update_message(message_id):
-    payload = {
-        "response": "Updated response after review",
-        "metadata": {
-            "updated_reason": "Security review completed"
-        }
-    }
-    
-    response = requests.patch(f"{API_ENDPOINT}/{message_id}", json=payload)
-    print_response(response, f"Update Message: {message_id}")
+def test_filter_by_status(status_filter):
+    """Filter messages using query parameters"""
+    response = requests.get(f"{API_ENDPOINT}/?status={status_filter}")
+    print_response(response, f"Filter Messages by Status: {status_filter}")
     return response.json()
 
 
 def run_all_tests():
     print("\n" + "="*60)
     print("Starting FastAPI Message System Tests")
-    print("Testing: Message-based architecture with review & flagging")
+    print("Testing: Three-State System (SAFE, FLAG, BLOCKED)")
     print("="*60)
     
     try:
@@ -211,70 +197,84 @@ def run_all_tests():
         print("Run: cd Backend && uvicorn main:app --reload")
         return
     
-    print("\n--- Testing Message Upload ---")
+    print("\n--- Phase 1: Upload Messages (All start as SAFE) ---")
     msg1 = test_upload_user_message()
-    
-    msg2 = test_upload_sensitive_message()
-    
+    msg2 = test_upload_suspicious_message()
     session_id = test_upload_multiple_session_messages()
     
-    print("\n--- Testing Message Retrieval ---")
+    print("\n--- Phase 2: Message Retrieval ---")
     test_get_all_messages()
-    
     test_get_employee_messages("emp_001")
-    
     test_get_session_messages(session_id)
     
-    print("\n--- Testing Review & Flagging System ---")
-    message_ids_to_bulk_flag = []
+    print("\n--- Phase 3: Flag Messages for Manual Review ---")
+    message_ids_to_process = []
     
     if msg2 and "id" in msg2:
-        test_flag_message(msg2["id"])
-        message_ids_to_bulk_flag.append(msg2["id"])
-        
-        test_mark_for_review(msg2["id"])
-        
-        test_update_message(msg2["id"])
+        test_set_message_to_flag(msg2["id"])
+        message_ids_to_process.append(msg2["id"])
     
     if msg1 and "id" in msg1:
-        test_mark_for_review(msg1["id"])
-        message_ids_to_bulk_flag.append(msg1["id"])
+        test_set_message_to_flag(msg1["id"])
+        message_ids_to_process.append(msg1["id"])
+    
+    print("\n--- Phase 4: Manual Review Queue ---")
+    flagged_messages = test_get_flagged_for_manual_review()
+    print(f"\n📋 Manual Review Queue: {len(flagged_messages)} message(s) awaiting review")
+    
+    print("\n--- Phase 5: Employer Review Actions ---")
+    if len(message_ids_to_process) >= 2:
+        # Block the first message after review
+        if message_ids_to_process[0]:
+            test_set_message_to_blocked(message_ids_to_process[0])
         
-        test_complete_review(msg1["id"])
+        # Mark second message as safe (false positive)
+        if message_ids_to_process[1]:
+            test_set_message_to_safe(message_ids_to_process[1])
     
-    print("\n--- Testing Enhanced Flagging Features ---")
-    if len(message_ids_to_bulk_flag) >= 2:
-        test_bulk_flag_messages(message_ids_to_bulk_flag)
+    print("\n--- Phase 6: Bulk Operations ---")
+    if len(message_ids_to_process) >= 2:
+        test_bulk_flag_messages(message_ids_to_process)
+        test_bulk_block_messages([message_ids_to_process[0]])
     
-    if msg1 and "id" in msg1:
-        test_unflag_message(msg1["id"])
+    print("\n--- Phase 7: Status-Based Queries ---")
+    test_get_messages_by_status("SAFE")
+    test_get_messages_by_status("FLAG")
+    test_get_messages_by_status("BLOCKED")
     
-    test_get_flagged_by_employee("emp_002")
+    if msg2:
+        test_get_employee_messages_by_status("emp_002", "FLAG")
     
-    test_get_flag_analytics()
+    test_filter_by_status("FLAG")
     
-    print("\n--- Testing Filter Endpoints ---")
-    test_get_flagged_messages()
-    
-    test_get_messages_needing_review()
-    
-    test_filter_messages()
+    print("\n--- Phase 8: Analytics & Statistics ---")
+    stats = test_get_statistics()
     
     print("\n" + "="*60)
     print("All Tests Completed!")
     print("="*60)
     print("\n📊 Summary:")
-    print("✓ Message upload with user_messages endpoint")
-    print("✓ Session-based message tracking")
-    print("✓ Employee and session filtering")
-    print("✓ Flagging system for security concerns")
-    print("✓ Bulk flagging for multiple messages")
-    print("✓ Unflagging capability")
-    print("✓ Flag analytics and statistics")
-    print("✓ Review workflow for employers")
-    print("✓ Message metadata and updates")
+    print("✓ Three-state system (SAFE, FLAG, BLOCKED)")
+    print("✓ Message upload (default: SAFE status)")
+    print("✓ Flag messages for manual review")
+    print("✓ Manual review queue endpoint")
+    print("✓ Employer actions (FLAG → BLOCKED or SAFE)")
+    print("✓ Bulk status updates")
+    print("✓ Status-based filtering and queries")
+    print("✓ Comprehensive analytics")
+    print("\n🔒 Security Workflow:")
+    print("  1. Messages start as SAFE")
+    print("  2. System/Bot flags suspicious → FLAG status")
+    print("  3. Employer reviews flagged messages")
+    print("  4. Employer decides: BLOCKED (violation) or SAFE (false positive)")
+    
+    if stats:
+        print(f"\n📈 Current System State:")
+        print(f"  Total Messages: {stats.get('total_messages', 0)}")
+        print(f"  SAFE: {stats.get('safe_messages', 0)}")
+        print(f"  FLAG: {stats.get('flagged_messages', 0)} (awaiting review)")
+        print(f"  BLOCKED: {stats.get('blocked_messages', 0)}")
 
 
 if __name__ == "__main__":
     run_all_tests()
-
