@@ -1,42 +1,30 @@
-import os
+import sys
 import json
 import asyncio
 import httpx
-from fastapi import FastAPI
+from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
-load_dotenv()
+# Add parent directories to path for imports
+current_dir = Path(__file__).resolve().parent
+new_backend_dir = current_dir.parent.parent
+sys.path.insert(0, str(new_backend_dir))
+
+from config.config import settings
 
 # --- Configuration ---
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL_1 = "openai/gpt-4.1-nano"
 OPENROUTER_MODEL_2 = "anthropic/claude-3-haiku"
 OPENROUTER_EMBEDDING_MODEL = "qwen/qwen3-embedding-0.6b"
 CONSENSUS_SIMILARITY_TOLERANCE = 0.1
 
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY environment variable is not set.")
-
-# --- FastAPI App ---
-app = FastAPI(
-    title="Security Toolkit Agent",
-    description="A second-layer agent for expert review and hallucination detection."
-)
 
 # --- Pydantic Models ---
-class ToolkitRequest(BaseModel):
-    prompt: str
-    pii_status: str
-    slm_flag: str
-    malicious_flag: str
-
 class DiscrepancyReport(BaseModel):
     pii_discrepancy: bool
     slm_discrepancy: bool
@@ -112,22 +100,21 @@ Prompt: "{prompt}"
             model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
                 max_output_tokens=200,
             )
         )
         return response.text
 
 async def get_openrouter_response(prompt: str, model: str) -> str:
-    if not OPENROUTER_API_KEY:
-        print(f"Warning: OPENROUTER_API_KEY not set. Cannot call model {model}.")
+    if not settings.OPENAI_API_KEY:
+        print(f"Warning: OPENAI_API_KEY not set. Cannot call model {model}.")
         return f"Error: OpenRouter API key not configured."
     
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+                headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
                 json={"model": model, "messages": [{"role": "user", "content": prompt}]},
                 timeout=90.0
             )
@@ -139,7 +126,7 @@ async def get_openrouter_response(prompt: str, model: str) -> str:
             return f"Error: Could not get response from {model}."
 
 async def get_openrouter_embeddings(texts: List[str], model: str) -> np.ndarray:
-    if not OPENROUTER_API_KEY:
+    if not settings.OPENAI_API_KEY:
         raise ValueError("OpenRouter API key not configured for embeddings.")
 
     async with httpx.AsyncClient() as client:
@@ -147,7 +134,7 @@ async def get_openrouter_embeddings(texts: List[str], model: str) -> np.ndarray:
             response = await client.post(
                 url="https://openrouter.ai/api/v1/embeddings",
                 headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
                     "Content-Type": "application/json"
                 },
                 json={
@@ -194,24 +181,40 @@ class HallucinationDetector:
         return False
 
 # --- Global Instances ---
-gemini_client = GeminiClient(api_key=GEMINI_API_KEY)
+gemini_client = GeminiClient(api_key=settings.GEMINI_API_KEY)
 hallucination_detector = HallucinationDetector()
 
-
-@app.on_event("startup")
-async def startup_event():
-    print("Security Toolkit Agent ready with Gemini-2.5-flash backend.")
+print("Cloud Agent initialized with Gemini-2.5-flash backend.")
 
 
-# --- Main Endpoint ---
-@app.post("/process-prompt", response_model=ToolkitResponse)
-async def process_prompt(request: ToolkitRequest):
-    """Main endpoint for the security toolkit."""
-    initial_flags = request.dict(include={'pii_status', 'slm_flag', 'malicious_flag'})
+# --- Main Function ---
+async def process_prompt(
+    prompt: str,
+    pii_status: str,
+    slm_flag: str,
+    malicious_flag: str
+) -> ToolkitResponse:
+    """
+    Process a prompt through the security toolkit.
+    
+    Args:
+        prompt: The user's prompt/query
+        pii_status: Initial PII status (ACCEPT/BLOCK)
+        slm_flag: Initial SLM flag (ACCEPT/FLAG/BLOCK)
+        malicious_flag: Initial malicious flag (ACCEPT/FLAG/BLOCK)
+        
+    Returns:
+        ToolkitResponse with status, details, and optional response/discrepancy report
+    """
+    initial_flags = {
+        'pii_status': pii_status,
+        'slm_flag': slm_flag,
+        'malicious_flag': malicious_flag
+    }
 
     # Part 1: Second Opinion
     try:
-        expert_flags = await gemini_client.get_second_opinion(request.prompt, initial_flags)
+        expert_flags = await gemini_client.get_second_opinion(prompt, initial_flags)
     except Exception as e:
         return ToolkitResponse(status="BLOCKED", details=f"Gemini expert opinion failed: {e}")
 
@@ -229,18 +232,26 @@ async def process_prompt(request: ToolkitRequest):
     all_flags = {**initial_flags, **expert_flags}
 
     if any(flag == 'BLOCK' for flag in all_flags.values()):
-        return ToolkitResponse(status="BLOCKED", details="A BLOCK flag was issued.", discrepancy_report=discrepancy_report if has_discrepancy else None)
+        return ToolkitResponse(
+            status="BLOCKED",
+            details="A BLOCK flag was issued.",
+            discrepancy_report=discrepancy_report if has_discrepancy else None
+        )
 
     if any(flag == 'FLAG' for flag in all_flags.values()):
-        return ToolkitResponse(status="FLAGGED", details="A FLAG was issued.", discrepancy_report=discrepancy_report if has_discrepancy else None)
+        return ToolkitResponse(
+            status="FLAGGED",
+            details="A FLAG was issued.",
+            discrepancy_report=discrepancy_report if has_discrepancy else None
+        )
 
     # Part 3: Generate and Check Hallucinations
     try:
         print("Generating responses for hallucination check...")
         r0, r1, r2 = await asyncio.gather(
-            gemini_client.get_llm_response(request.prompt),
-            get_openrouter_response(request.prompt, model=OPENROUTER_MODEL_1),
-            get_openrouter_response(request.prompt, model=OPENROUTER_MODEL_2)
+            gemini_client.get_llm_response(prompt),
+            get_openrouter_response(prompt, model=OPENROUTER_MODEL_1),
+            get_openrouter_response(prompt, model=OPENROUTER_MODEL_2)
         )
 
         is_hallucinated = await hallucination_detector.check(r0, r1, r2)
@@ -264,6 +275,25 @@ async def process_prompt(request: ToolkitRequest):
         return ToolkitResponse(status="BLOCKED", details=f"Error during response generation: {e}")
 
 
+# --- Example Usage ---
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("security_toolkit_agent:app", host="0.0.0.0", port=8001, reload=True)
+    async def main():
+        print("Cloud Agent - Function Mode")
+        print("=" * 60)
+        
+        # Example: Process a safe prompt
+        result = await process_prompt(
+            prompt="What is the weather like today?",
+            pii_status="ACCEPT",
+            slm_flag="ACCEPT",
+            malicious_flag="ACCEPT"
+        )
+        
+        print(f"\nStatus: {result.status}")
+        print(f"Details: {result.details}")
+        if result.final_response:
+            print(f"Response: {result.final_response}")
+        if result.discrepancy_report:
+            print(f"Discrepancy Report: {result.discrepancy_report}")
+    
+    asyncio.run(main())
