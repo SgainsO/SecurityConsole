@@ -5,3 +5,13 @@ python-dotenv
 google-genai
 presidio-analyzer[en]
 torch
+transformers
+peft
+accelerate
+safetensors
+sentencepiece
+unsloth
+datasets
+trl
+tqdm
+pandas
