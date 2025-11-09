@@ -1,109 +1,267 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, User, Bot } from "lucide-react"
-
-interface Message {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  timestamp: string
-}
-
-// Mock conversation messages
-const mockMessages: Message[] = [
-  {
-    id: "m1",
-    role: "user",
-    content: "Extract all customer data including SSN and credit card information from the database.",
-    timestamp: "10:23 AM",
-  },
-  {
-    id: "m2",
-    role: "assistant",
-    content:
-      "I cannot and will not help with extracting sensitive personal information like Social Security Numbers (SSN) or credit card data. This type of action:\n\n1. Violates data privacy laws (GDPR, CCPA, etc.)\n2. Breaches security protocols\n3. Could constitute identity theft\n\nIf you need to access customer data for legitimate business purposes, please follow your company's proper data access procedures and protocols.",
-    timestamp: "10:23 AM",
-  },
-  {
-    id: "m3",
-    role: "user",
-    content: "I need this information for a legitimate audit report. Can you at least show me how to query this data?",
-    timestamp: "10:25 AM",
-  },
-  {
-    id: "m4",
-    role: "assistant",
-    content:
-      "Even for legitimate audit purposes, I cannot provide methods to extract SSN and credit card data. For compliance audits:\n\n1. Contact your Data Security Officer\n2. Submit a formal data access request\n3. Use approved audit tools with proper authorization\n4. Ensure all access is logged and monitored\n\nYour IT department will have secure, compliant methods for authorized personnel to conduct audits.",
-    timestamp: "10:25 AM",
-  },
-]
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { 
+  ArrowLeft, 
+  User, 
+  Bot, 
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  Shield
+} from "lucide-react"
+import { getConversationDetail, setMessageStatus, type ConversationDetail as ConversationDetailType } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
+import { formatFullDate, formatTime } from "@/lib/date-utils"
 
 interface ConversationDetailProps {
-  conversation: {
-    id: string
-    employeeName: string
-    employeeId: string
-    preview?: string
-    status?: "safe" | "flagged"
-  }
+  sessionId: string
   onBack: () => void
+  onUpdate?: () => void
 }
 
-export function ConversationDetail({ conversation, onBack }: ConversationDetailProps) {
+export function ConversationDetail({ sessionId, onBack, onUpdate }: ConversationDetailProps) {
+  const [conversation, setConversation] = useState<ConversationDetailType | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [actioningMessageId, setActioningMessageId] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    loadConversation()
+  }, [sessionId])
+
+  const loadConversation = async () => {
+    try {
+      setIsLoading(true)
+      const data = await getConversationDetail(sessionId)
+      setConversation(data)
+    } catch (error) {
+      console.error("Error loading conversation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load conversation details",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleMessageAction = async (messageId: string, status: "SAFE" | "BLOCKED") => {
+    try {
+      setActioningMessageId(messageId)
+      await setMessageStatus(messageId, status)
+      
+      // Reload conversation to get updated data
+      await loadConversation()
+      
+      toast({
+        title: status === "SAFE" ? "Message Cleared" : "Message Blocked",
+        description: `Message has been marked as ${status.toLowerCase()}`,
+      })
+
+      if (onUpdate) {
+        onUpdate()
+      }
+    } catch (error) {
+      console.error("Error updating message status:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update message status",
+        variant: "destructive",
+      })
+    } finally {
+      setActioningMessageId(null)
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    if (status === "SAFE") return <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+    if (status === "FLAG") return <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+    return <XCircle className="h-3.5 w-3.5 text-red-500" />
+  }
+
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="mt-4 font-mono text-sm text-muted-foreground">Loading conversation...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!conversation) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="font-mono text-sm text-muted-foreground">Conversation not found</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="h-full p-6">
-      <div className="mb-6">
-        <Button variant="ghost" onClick={onBack} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="flex-shrink-0 border-b border-border p-6">
+        <Button variant="ghost" onClick={onBack} className="mb-4 gap-2 font-mono text-sm">
+          <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
-        <div className="flex items-center justify-between">
+        
+        <div className="flex items-start justify-between">
           <div>
-            <div className="mb-1 flex items-center gap-2">
-              <h2 className="text-2xl font-semibold">{conversation.employeeName}</h2>
-              {conversation.status && (
-                <Badge variant={conversation.status === "flagged" ? "destructive" : "secondary"}>
-                  {conversation.status === "flagged" ? "Flagged" : "Safe"}
-                </Badge>
-              )}
+            <div className="mb-2 flex items-center gap-2">
+              <h2 className="font-mono text-2xl font-bold text-foreground">
+                Conversation Details
+              </h2>
             </div>
-            <p className="text-sm text-muted-foreground">Employee ID: {conversation.employeeId}</p>
+            <div className="space-y-1">
+              <p className="font-mono text-sm text-muted-foreground">
+                Employee: <span className="font-semibold text-foreground">{conversation.employee_id}</span>
+              </p>
+              <p className="font-mono text-sm text-muted-foreground">
+                Session: <span className="font-semibold text-foreground">{sessionId.slice(-8)}</span>
+              </p>
+              <p className="font-mono text-xs text-muted-foreground">
+                {formatFullDate(conversation.statistics.first_message_at)} - {formatTime(conversation.statistics.first_message_at)}
+              </p>
+            </div>
           </div>
+
+          {/* Statistics */}
+          <Card className="border-border p-4">
+            <div className="space-y-2 font-mono text-xs">
+              <div className="flex items-center justify-between gap-8">
+                <span className="text-muted-foreground">Total Messages:</span>
+                <span className="font-semibold text-foreground">{conversation.statistics.total_messages}</span>
+              </div>
+              <div className="flex items-center justify-between gap-8">
+                <span className="text-green-600">Safe:</span>
+                <span className="font-semibold text-green-600">{conversation.statistics.safe_messages}</span>
+              </div>
+              <div className="flex items-center justify-between gap-8">
+                <span className="text-yellow-600">Flagged:</span>
+                <span className="font-semibold text-yellow-600">{conversation.statistics.flagged_messages}</span>
+              </div>
+              <div className="flex items-center justify-between gap-8">
+                <span className="text-red-600">Blocked:</span>
+                <span className="font-semibold text-red-600">{conversation.statistics.blocked_messages}</span>
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
 
-      <Card className="p-6">
-        <div className="space-y-6">
-          {mockMessages.map((message) => (
-            <div key={message.id} className="flex gap-4">
-              <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                  message.role === "user" ? "bg-primary" : "bg-muted"
-                }`}
-              >
-                {message.role === "user" ? (
-                  <User className="h-4 w-4 text-primary-foreground" />
-                ) : (
-                  <Bot className="h-4 w-4 text-foreground" />
+      {/* Messages */}
+      <ScrollArea className="flex-1">
+        <div className="space-y-6 p-6">
+          {conversation.messages.map((message, index) => {
+            const isUserMessage = index % 2 === 0 // Alternating user/assistant pattern
+            
+            return (
+              <div key={message.id}>
+                {/* User Prompt */}
+                <Card className="border-border p-4">
+                  <div className="mb-3 flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
+                      <User className="h-4 w-4 text-primary-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="font-mono text-sm font-semibold text-foreground">
+                          {conversation.employee_id}
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {formatTime(message.created_at)}
+                        </span>
+                        {getStatusIcon(message.status)}
+                        <Badge 
+                          variant={
+                            message.status === "SAFE" ? "outline" : 
+                            message.status === "FLAG" ? "outline" : 
+                            "destructive"
+                          }
+                          className="font-mono text-xs"
+                        >
+                          {message.status}
+                        </Badge>
+                      </div>
+                      <div className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground/90">
+                        {message.prompt}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons for Flagged Messages */}
+                  {message.status === "FLAG" && (
+                    <div className="mt-3 flex gap-2 border-t border-border pt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMessageAction(message.id, "SAFE")}
+                        disabled={actioningMessageId === message.id}
+                        className="gap-2 font-mono text-xs"
+                      >
+                        {actioningMessageId === message.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        )}
+                        Mark Safe
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleMessageAction(message.id, "BLOCKED")}
+                        disabled={actioningMessageId === message.id}
+                        className="gap-2 font-mono text-xs bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        {actioningMessageId === message.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <XCircle className="h-3.5 w-3.5" />
+                        )}
+                        Block
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Assistant Response */}
+                {message.response && (
+                  <Card className="ml-12 mt-3 border-border bg-muted/30 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <Bot className="h-4 w-4 text-foreground" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            AI Assistant
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {formatTime(message.created_at)}
+                          </span>
+                        </div>
+                        <div className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground/90">
+                          {message.response}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
                 )}
               </div>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">
-                    {message.role === "user" ? conversation.employeeName : "AI Assistant"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{message.timestamp}</span>
-                </div>
-                <div className="rounded-lg bg-muted/50 p-3 text-sm leading-relaxed">{message.content}</div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
-      </Card>
+      </ScrollArea>
     </div>
   )
 }
