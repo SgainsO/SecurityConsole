@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { getConversations, type ConversationSummary } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { formatRelativeTime } from "@/lib/date-utils"
 
 interface AllConversationsViewProps {
   onViewConversation?: (sessionId: string) => void
@@ -89,25 +90,6 @@ export function AllConversationsView({ onViewConversation }: AllConversationsVie
     setFilteredConversations(filtered)
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    
-    if (hours < 1) {
-      const minutes = Math.floor(diff / (1000 * 60))
-      return `${minutes}m ago`
-    }
-    if (hours < 24) {
-      return `${hours}h ago`
-    }
-    const days = Math.floor(hours / 24)
-    if (days === 1) return "Yesterday"
-    if (days < 7) return `${days}d ago`
-    
-    return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
-  }
 
   if (isLoading) {
     return (
@@ -198,83 +180,59 @@ export function AllConversationsView({ onViewConversation }: AllConversationsVie
             </div>
           ) : (
             filteredConversations.map((conversation) => (
-              <Card key={conversation.session_id} className="border-border p-4">
-                <div className="flex items-start gap-4">
-                  <div className="rounded-lg bg-muted p-3">
-                    <MessageSquare className="h-5 w-5 text-muted-foreground" />
+              <Card 
+                key={conversation.session_id} 
+                className="group cursor-pointer overflow-hidden transition-all hover:border-primary/50 hover:bg-accent/5"
+                onClick={() => onViewConversation?.(conversation.session_id)}
+              >
+                <div className="p-4">
+                  {/* Header Row */}
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="font-mono text-xs font-semibold">
+                        {conversation.employee_id}
+                      </Badge>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {formatRelativeTime(conversation.last_message_at)}
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      #{conversation.session_id.slice(-8)}
+                    </span>
                   </div>
 
-                  <div className="flex-1">
-                    {/* Top Row: Employee and Session Info */}
-                    <div className="mb-3 flex items-start justify-between">
-                      <div>
-                        <div className="mb-1 flex items-center gap-2">
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {conversation.employee_id}
-                          </Badge>
-                          <span className="font-mono text-xs text-muted-foreground">
-                            Session: {conversation.session_id.slice(-8)}
-                          </span>
-                        </div>
-                        <p className="font-mono text-xs text-muted-foreground">
-                          {formatDate(conversation.last_message_at)}
-                        </p>
-                      </div>
+                  {/* Message Preview */}
+                  {conversation.latest_prompt && (
+                    <p className="mb-3 line-clamp-2 text-sm text-foreground/90">
+                      {conversation.latest_prompt}
+                    </p>
+                  )}
 
-                      {onViewConversation && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onViewConversation(conversation.session_id)}
-                          className="gap-2 font-mono text-xs"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Latest Message Preview */}
-                    {conversation.latest_prompt && (
-                      <p className="mb-3 line-clamp-2 font-mono text-sm text-foreground/80">
-                        "{conversation.latest_prompt}"
-                      </p>
-                    )}
-
-                    {/* Statistics Row */}
+                  {/* Stats Bar */}
+                  <div className="flex items-center justify-between border-t border-border/50 pt-3">
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1.5">
-                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {conversation.message_count} messages
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {conversation.safe_count} safe
-                        </span>
-                      </div>
-
+                      <span className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        {conversation.message_count}
+                      </span>
+                      <span className="flex items-center gap-1.5 font-mono text-xs text-green-600">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        {conversation.safe_count}
+                      </span>
                       {conversation.flagged_count > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
-                          <span className="font-mono text-xs font-semibold text-yellow-600">
-                            {conversation.flagged_count} flagged
-                          </span>
-                        </div>
+                        <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-yellow-600">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          {conversation.flagged_count}
+                        </span>
                       )}
-
                       {conversation.blocked_count > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <XCircle className="h-3.5 w-3.5 text-red-500" />
-                          <span className="font-mono text-xs font-semibold text-red-600">
-                            {conversation.blocked_count} blocked
-                          </span>
-                        </div>
+                        <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-red-600">
+                          <XCircle className="h-3.5 w-3.5" />
+                          {conversation.blocked_count}
+                        </span>
                       )}
                     </div>
+                    <Eye className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
                 </div>
               </Card>

@@ -50,14 +50,13 @@ async def get_all_conversations(
     db = await get_database()
     
     # Build aggregation pipeline
-    match_stage = {}
+    match_stage = {
+        "session_id": {"$ne": None}  # Exclude messages without session_id
+    }
     if employee_id:
         match_stage["employee_id"] = employee_id
     
-    pipeline = []
-    
-    if match_stage:
-        pipeline.append({"$match": match_stage})
+    pipeline = [{"$match": match_stage}]
     
     # Group by session_id and calculate statistics
     pipeline.extend([

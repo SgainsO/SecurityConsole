@@ -7,20 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertTriangle, CheckCircle, XCircle, Eye, Loader2, RefreshCw } from "lucide-react"
 import { getFlaggedMessages, setMessageStatus, type Message } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
-
-function getTimeAgo(dateString: string): string {
-  const date = new Date(dateString)
-  const now = new Date()
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-  
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
+import { formatRelativeTime } from "@/lib/date-utils"
 
 export function ReviewPanel() {
   const [flaggedMessages, setFlaggedMessages] = useState<Message[]>([])
@@ -155,7 +142,7 @@ export function ReviewPanel() {
                     <div className="font-mono text-xs text-muted-foreground">ID: {message.employee_id}</div>
 
                     <div className="ml-auto font-mono text-xs text-muted-foreground">
-                      {getTimeAgo(message.created_at)}
+                      {formatRelativeTime(message.created_at)}
                     </div>
                   </div>
 
@@ -194,7 +181,7 @@ export function ReviewPanel() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      className="gap-1.5 font-mono text-xs"
+                      className="gap-1.5 font-mono text-xs bg-red-600 hover:bg-red-700 text-white"
                       onClick={() => handleBlock(message.id)}
                     >
                       <XCircle className="h-3.5 w-3.5" />

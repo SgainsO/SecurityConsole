@@ -339,3 +339,70 @@ export async function getEmployeeSessions(employeeId: string): Promise<Array<{
   return response.json()
 }
 
+// ============== EMPLOYEE ENDPOINTS ==============
+
+export interface EmployeeStatistics {
+  employee_id: string
+  total_messages: number
+  safe_messages: number
+  flagged_messages: number
+  blocked_messages: number
+  conversations_count: number
+  risk_score: number
+  last_activity: string
+}
+
+export interface EmployeeRiskSummary {
+  total_employees: number
+  high_risk: number
+  medium_risk: number
+  low_risk: number
+}
+
+// Get all employees with statistics
+export async function getEmployees(params?: {
+  min_risk?: number
+  sort_by?: 'risk' | 'flags' | 'blocks' | 'total'
+  skip?: number
+  limit?: number
+}): Promise<EmployeeStatistics[]> {
+  const queryParams = new URLSearchParams()
+
+  if (params?.min_risk !== undefined) queryParams.append('min_risk', params.min_risk.toString())
+  if (params?.sort_by) queryParams.append('sort_by', params.sort_by)
+  if (params?.skip) queryParams.append('skip', params.skip.toString())
+  if (params?.limit) queryParams.append('limit', params.limit.toString())
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/employees/?${queryParams.toString()}`
+  )
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch employees')
+  }
+
+  return response.json()
+}
+
+// Get detailed statistics for a specific employee
+export async function getEmployeeDetail(employeeId: string): Promise<EmployeeStatistics> {
+  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch employee detail')
+  }
+
+  return response.json()
+}
+
+// Get employee risk level summary
+export async function getEmployeeRiskSummary(): Promise<EmployeeRiskSummary> {
+  const response = await fetch(`${API_BASE_URL}/api/employees/summary/risk-levels`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch employee risk summary')
+  }
+
+  return response.json()
+}
+

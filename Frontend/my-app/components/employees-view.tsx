@@ -16,26 +16,16 @@ import {
   Search,
   Shield
 } from "lucide-react"
-import { getConversations, type ConversationSummary } from "@/lib/api"
+import { getEmployees, type EmployeeStatistics } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 
-interface EmployeeStats {
-  employee_id: string
-  total_messages: number
-  safe_messages: number
-  flagged_messages: number
-  blocked_messages: number
-  conversations_count: number
-  risk_score: number
-}
-
 export function EmployeesView() {
-  const [employees, setEmployees] = useState<EmployeeStats[]>([])
-  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeStats[]>([])
+  const [employees, setEmployees] = useState<EmployeeStatistics[]>([])
+  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeStatistics[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [sortBy, setSortBy] = useState<"flags" | "blocks" | "total">("flags")
+  const [sortBy, setSortBy] = useState<"flags" | "blocks" | "total" | "risk">("risk")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -50,40 +40,12 @@ export function EmployeesView() {
     try {
       setIsRefreshing(true)
       
-      // Get all conversations to aggregate employee statistics
-      const conversations = await getConversations({ limit: 1000 })
-      
-      // Aggregate stats by employee
-      const employeeMap = new Map<string, EmployeeStats>()
-      
-      conversations.forEach(conv => {
-        const existing = employeeMap.get(conv.employee_id) || {
-          employee_id: conv.employee_id,
-          total_messages: 0,
-          safe_messages: 0,
-          flagged_messages: 0,
-          blocked_messages: 0,
-          conversations_count: 0,
-          risk_score: 0
-        }
-        
-        existing.total_messages += conv.message_count
-        existing.safe_messages += conv.safe_count
-        existing.flagged_messages += conv.flagged_count
-        existing.blocked_messages += conv.blocked_count
-        existing.conversations_count += 1
-        
-        // Calculate simple risk score (0-100)
-        const flagWeight = 2
-        const blockWeight = 5
-        existing.risk_score = Math.min(100, 
-          (existing.flagged_messages * flagWeight + existing.blocked_messages * blockWeight)
-        )
-        
-        employeeMap.set(conv.employee_id, existing)
+      // Get employee statistics from dedicated endpoint
+      const employeeList = await getEmployees({ 
+        limit: 1000,
+        sort_by: sortBy === "risk" ? "risk" : sortBy === "flags" ? "flags" : sortBy === "blocks" ? "blocks" : "total"
       })
       
-      const employeeList = Array.from(employeeMap.values())
       setEmployees(employeeList)
       
       if (showToast) {
@@ -116,8 +78,9 @@ export function EmployeesView() {
       )
     }
 
-    // Sort
+    // Sort (backend already sorts, but we re-sort after filtering)
     filtered.sort((a, b) => {
+      if (sortBy === "risk") return b.risk_score - a.risk_score
       if (sortBy === "flags") return b.flagged_messages - a.flagged_messages
       if (sortBy === "blocks") return b.blocked_messages - a.blocked_messages
       return b.total_messages - a.total_messages
@@ -181,6 +144,15 @@ export function EmployeesView() {
             />
           </div>
           <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={sortBy === "risk" ? "secondary" : "outline"}
+              onClick={() => setSortBy("risk")}
+              className="gap-2 font-mono text-xs"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              Risk
+            </Button>
             <Button
               size="sm"
               variant={sortBy === "flags" ? "secondary" : "outline"}

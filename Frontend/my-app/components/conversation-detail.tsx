@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { getConversationDetail, setMessageStatus, type ConversationDetail as ConversationDetailType } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { formatFullDate, formatTime } from "@/lib/date-utils"
 
 interface ConversationDetailProps {
   sessionId: string
@@ -85,15 +86,6 @@ export function ConversationDetail({ sessionId, onBack, onUpdate }: Conversation
     return <XCircle className="h-3.5 w-3.5 text-red-500" />
   }
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
-  }
 
   if (isLoading) {
     return (
@@ -138,7 +130,7 @@ export function ConversationDetail({ sessionId, onBack, onUpdate }: Conversation
                 Session: <span className="font-semibold text-foreground">{sessionId.slice(-8)}</span>
               </p>
               <p className="font-mono text-xs text-muted-foreground">
-                {formatDate(conversation.statistics.first_message_at)} - {formatTime(conversation.statistics.first_message_at)}
+                {formatFullDate(conversation.statistics.first_message_at)} - {formatTime(conversation.statistics.first_message_at)}
               </p>
             </div>
           </div>
@@ -229,7 +221,7 @@ export function ConversationDetail({ sessionId, onBack, onUpdate }: Conversation
                         variant="destructive"
                         onClick={() => handleMessageAction(message.id, "BLOCKED")}
                         disabled={actioningMessageId === message.id}
-                        className="gap-2 font-mono text-xs"
+                        className="gap-2 font-mono text-xs bg-red-600 hover:bg-red-700 text-white"
                       >
                         {actioningMessageId === message.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />

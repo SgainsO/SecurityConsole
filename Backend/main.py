@@ -7,6 +7,8 @@ from routers.routes import router
 from routers.message_routes import router as message_router
 from routers.chat_routes import router as chat_router
 from routers.conversation_routes import router as conversation_router
+from routers.employee_routes import router as employee_router
+from routers.admin_routes import router as admin_router
 
 
 @asynccontextmanager
@@ -46,6 +48,8 @@ app.include_router(router)
 app.include_router(message_router)
 app.include_router(chat_router)
 app.include_router(conversation_router)
+app.include_router(employee_router)
+app.include_router(admin_router)
 
 
 @app.get("/")

@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { getEmployeeSessions } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { formatRelativeTime } from "@/lib/date-utils"
 
 interface Session {
   session_id: string
@@ -72,25 +73,6 @@ export function EmployeeSidebar({
     }
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    
-    if (hours < 1) {
-      const minutes = Math.floor(diff / (1000 * 60))
-      return `${minutes}m ago`
-    }
-    if (hours < 24) {
-      return `${hours}h ago`
-    }
-    const days = Math.floor(hours / 24)
-    if (days === 1) return "Yesterday"
-    if (days < 7) return `${days}d ago`
-    
-    return date.toLocaleDateString([], { month: "short", day: "numeric" })
-  }
 
   if (isLoading) {
     return (
@@ -180,7 +162,7 @@ export function EmployeeSidebar({
                     {session.message_count} msgs
                   </Badge>
                   <span className="font-mono text-xs text-muted-foreground">
-                    {formatDate(session.last_message_at)}
+                    {formatRelativeTime(session.last_message_at)}
                   </span>
                 </div>
               </button>

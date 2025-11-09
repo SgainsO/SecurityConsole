@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { getStatistics, getFlaggedMessages, type MessageStatistics, type Message } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { formatRelativeTime } from "@/lib/date-utils"
 
 interface DashboardOverviewProps {
   onViewFlagged?: () => void
@@ -63,21 +64,6 @@ export function DashboardOverview({ onViewFlagged }: DashboardOverviewProps) {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const minutes = Math.floor(diff / (1000 * 60))
-    
-    if (minutes < 1) return "Just now"
-    if (minutes < 60) return `${minutes}m ago`
-    
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    
-    const days = Math.floor(hours / 24)
-    return `${days}d ago`
-  }
 
   if (isLoading) {
     return (
@@ -218,7 +204,7 @@ export function DashboardOverview({ onViewFlagged }: DashboardOverviewProps) {
                         {message.employee_id}
                       </Badge>
                       <span className="font-mono text-xs text-muted-foreground">
-                        {formatDate(message.created_at)}
+                        {formatRelativeTime(message.created_at)}
                       </span>
                     </div>
                     <p className="line-clamp-2 font-mono text-sm text-foreground/80">

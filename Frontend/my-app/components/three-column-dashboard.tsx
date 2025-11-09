@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getMessagesByStatus, setMessageStatus, type Message } from "@/lib/api"
+import { formatRelativeTime } from "@/lib/date-utils"
 
 type ViewType = "safe" | "review" | "blocked"
 
@@ -160,19 +161,6 @@ export function ThreeColumnDashboard() {
     }
   }
 
-  const getTimeAgo = (dateString: string): string => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-    
-    if (seconds < 60) return `${seconds} seconds ago`
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`
-    const days = Math.floor(hours / 24)
-    return `${days} day${days !== 1 ? 's' : ''} ago`
-  }
 
   const getRiskScore = (message: Message): number => {
     // Try to get risk score from metadata if available
@@ -368,7 +356,7 @@ export function ThreeColumnDashboard() {
                           )}
                           <span className="text-xs font-medium text-foreground">{message.employee_id}</span>
                         </div>
-                        <span className="text-xs text-muted-foreground">{getTimeAgo(message.created_at).split(' ')[0]}{getTimeAgo(message.created_at).split(' ')[1]}</span>
+                        <span className="text-xs text-muted-foreground">{formatRelativeTime(message.created_at)}</span>
                       </div>
                       <p className="line-clamp-2 text-sm text-foreground/80">{message.prompt}</p>
                       {activeView === "review" && (
@@ -431,7 +419,7 @@ export function ThreeColumnDashboard() {
                         <Clock className="h-4 w-4" />
                         <span className="text-xs">Time</span>
                       </div>
-                      <p className="mt-1 font-medium text-foreground">{getTimeAgo(selectedMessage.created_at)}</p>
+                      <p className="mt-1 font-medium text-foreground">{formatRelativeTime(selectedMessage.created_at)}</p>
                     </Card>
                     <Card className="p-3">
                       <div className="flex items-center gap-2 text-muted-foreground">
@@ -517,7 +505,7 @@ export function ThreeColumnDashboard() {
                         variant="destructive"
                         onClick={() => handleMessageAction(selectedMessage.id, "BLOCKED")}
                         disabled={actioningMessageId === selectedMessage.id}
-                        className="flex-1"
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white"
                       >
                         {actioningMessageId === selectedMessage.id ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
