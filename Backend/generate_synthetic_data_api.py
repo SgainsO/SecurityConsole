@@ -81,7 +81,7 @@ RESPONSES = {
 def generate_synthetic_data(num_sessions_per_employee=3, messages_per_session=5):
     """Generate synthetic data via API"""
     
-    print("🚀 Security Console - Synthetic Data Generator")
+    print("🚀 Aiber - Synthetic Data Generator")
     print("="*60)
     print(f"📊 Generating data for {len(EMPLOYEES)} employees...")
     print(f"   Sessions per employee: {num_sessions_per_employee}")
@@ -181,7 +181,7 @@ def generate_synthetic_data(num_sessions_per_employee=3, messages_per_session=5)
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='Generate synthetic data for Security Console')
+    parser = argparse.ArgumentParser(description='Generate synthetic data for Aiber')
     parser.add_argument('--sessions', type=int, default=3, help='Sessions per employee (default: 3)')
     parser.add_argument('--messages', type=int, default=5, help='Messages per session (default: 5)')
     

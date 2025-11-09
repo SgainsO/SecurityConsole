@@ -61,7 +61,7 @@ export function EmployerNavigation({
       {/* Header */}
       <div className="flex-shrink-0 border-b border-border p-4">
         <h1 className="font-mono text-lg font-bold text-foreground">
-          Security Console
+          Aiber
         </h1>
         <p className="mt-1 font-mono text-xs text-muted-foreground">
           Employer Dashboard
