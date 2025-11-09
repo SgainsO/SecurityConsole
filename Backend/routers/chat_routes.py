@@ -18,11 +18,30 @@ root_dir = current_dir.parent.parent
 sys.path.insert(0, str(root_dir))
 
 try:
-    from services.cloud_agent.agent import process_prompt, gemini_client
-except ImportError:
-    print("Warning: Could not import cloud agent")
+    from services.local_agent import LocalSecurityAgent
+    from services.cloud_agent.agent import process_prompt
+except ImportError as e:
+    print(f"Warning: Could not import security agents: {e}")
+    LocalSecurityAgent = None
     process_prompt = None
-    gemini_client = None
+
+# Global local agent instance - initialized on startup
+local_security_agent: Optional[LocalSecurityAgent] = None
+
+
+def initialize_chat_agent(model_path: str = "betModel"):
+    """Initialize the local security agent for chat."""
+    global local_security_agent
+    if local_security_agent is None:
+        print("Initializing Local Security Agent for chat...")
+        try:
+            local_security_agent = LocalSecurityAgent(model_path=model_path)
+            print("Chat agent ready.")
+        except Exception as e:
+            print(f"Error initializing Chat Agent: {e}")
+            print("Note: Place your fine-tuned 'betModel' directory in the project root")
+            print("Chat will continue with PII detection only (no ML-based misuse detection)")
+            raise  # Re-raise to let main.py handle it gracefully
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -50,31 +69,35 @@ class ChatResponse(BaseModel):
 async def send_chat_message(request: ChatRequest):
     """
     Send a chat message from employee to LLM.
-    - Runs security checks
-    - Gets LLM response if safe
-    - Logs everything to database
-    - Returns response to employee
+    
+    Complete workflow:
+    1. Local Agent: PII detection, malicious intent detection, sensitive data check
+    2. Cloud Agent: Second opinion, LLM response generation, hallucination detection
+    3. Database logging and response to employee
     """
     db = await get_database()
     
     # Generate session ID if not provided
     session_id = request.session_id or f"session_{request.employee_id}_{int(datetime.utcnow().timestamp())}"
     
-    # Step 1: Run on-premise security checks (PII, SLM, Malicious)
-    # For now, we'll assume ACCEPT status - you can integrate the on_premise_agent here
+    # Step 1: Run local agent security checks (PII, SLM, Malicious)
     initial_pii_status = "ACCEPT"
     initial_slm_flag = "ACCEPT"
     initial_malicious_flag = "ACCEPT"
     
-    # TODO: Integrate with on_premise_agent for real checks
-    # try:
-    #     from on_premise_agent import check_query
-    #     security_check = await check_query(request.message)
-    #     initial_pii_status = security_check.pii_status
-    #     initial_slm_flag = security_check.slm_flag
-    #     initial_malicious_flag = security_check.malicious_flag
-    # except Exception as e:
-    #     logger.error(f"Security check failed: {e}")
+    if local_security_agent:
+        try:
+            logger.info(f"Running local security check for employee {request.employee_id}")
+            security_check = await local_security_agent.check_query(request.message)
+            initial_pii_status = security_check.pii_status
+            initial_slm_flag = security_check.slm_flag
+            initial_malicious_flag = security_check.malicious_flag
+            logger.info(f"Local check results - PII: {initial_pii_status}, SLM: {initial_slm_flag}, Malicious: {initial_malicious_flag}")
+        except Exception as e:
+            logger.error(f"Local security check failed: {e}")
+            # Continue with ACCEPT defaults if check fails
+    else:
+        logger.warning("Local security agent not initialized - using default ACCEPT values")
     
     # Step 2: If blocked by PII, return immediately
     if initial_pii_status == "BLOCK":
@@ -120,7 +143,8 @@ async def send_chat_message(request: ChatRequest):
     security_details = {}
     
     try:
-        if process_prompt and gemini_client:
+        if process_prompt:
+            logger.info(f"Processing through cloud agent for employee {request.employee_id}")
             # Use cloud agent for security validation and response
             toolkit_response = await process_prompt(
                 prompt=request.message,
@@ -154,13 +178,10 @@ async def send_chat_message(request: ChatRequest):
             if toolkit_response.discrepancy_report:
                 security_details["discrepancy_report"] = toolkit_response.discrepancy_report.dict()
         else:
-            # Fallback to simple Gemini response if cloud agent not available
-            if gemini_client:
-                llm_response = await gemini_client.get_llm_response(request.message)
-                final_status = MessageStatus.SAFE
-            else:
-                llm_response = "LLM service is currently unavailable. Please try again later."
-                final_status = MessageStatus.FLAG
+            # Cloud agent not available
+            logger.error("Cloud agent (process_prompt) not available")
+            llm_response = "LLM service is currently unavailable. Please try again later."
+            final_status = MessageStatus.FLAG
     
     except Exception as e:
         logger.error(f"LLM processing failed: {e}")
