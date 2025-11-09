@@ -14,7 +14,7 @@ sys.path.insert(0, str(new_backend_dir))
 from config.config import settings
 
 # --- Configuration ---
-GEMINI_MODEL = "google/gemini-2.0-flash-exp:free"  # Gemini via OpenRouter
+GEMINI_MODEL = "google/gemini-2.5-flash"  # Gemini via OpenRouter
 HALLUCINATION_CHECKER_MODEL = "x-ai/grok-4-fast"
 
 
