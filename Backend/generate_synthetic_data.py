@@ -1,5 +1,5 @@
 """
-Generate synthetic data for the Security Console application
+Generate synthetic data for the Aiber application
 Creates employees, conversations, and messages with various statuses
 """
 import asyncio
@@ -196,14 +196,14 @@ async def main():
     """Main function"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Generate synthetic data for Security Console')
+    parser = argparse.ArgumentParser(description='Generate synthetic data for Aiber')
     parser.add_argument('--clear', action='store_true', help='Clear existing data first')
     parser.add_argument('--sessions', type=int, default=3, help='Sessions per employee (default: 3)')
     parser.add_argument('--messages', type=int, default=5, help='Messages per session (default: 5)')
     
     args = parser.parse_args()
     
-    print("🚀 Security Console - Synthetic Data Generator")
+    print("🚀 Aiber - Synthetic Data Generator")
     print("="*60)
     print()
     

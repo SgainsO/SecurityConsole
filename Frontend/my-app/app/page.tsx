@@ -14,7 +14,7 @@ export default function Home() {
       <div className="w-full max-w-md p-6">
         <div className="mb-8 text-center">
           <h1 className="mb-2 font-mono text-3xl font-bold text-foreground">
-            Security Console
+            Aiber
           </h1>
           <p className="font-mono text-sm text-muted-foreground">
             Select your role to continue

@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Security Console - New Backend API",
+    title="Aiber - New Backend API",
     description="Backend API for processing prompts through the security agent and logging to database",
     version="1.0.0",
     lifespan=lifespan
@@ -56,7 +56,7 @@ app.include_router(admin_router)
 async def root():
     """Root endpoint."""
     return {
-        "message": "Security Console - New Backend API",
+        "message": "Aiber - New Backend API",
         "version": "1.0.0",
         "docs": "/docs"
     }
