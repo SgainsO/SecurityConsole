@@ -4,6 +4,9 @@ from contextlib import asynccontextmanager
 
 from database.connection import connect_to_mongo, close_mongo_connection
 from routers.routes import router
+from routers.message_routes import router as message_router
+from routers.chat_routes import router as chat_router
+from routers.conversation_routes import router as conversation_router
 
 
 @asynccontextmanager
@@ -40,6 +43,9 @@ app.add_middleware(
 
 # Include routers
 app.include_router(router)
+app.include_router(message_router)
+app.include_router(chat_router)
+app.include_router(conversation_router)
 
 
 @app.get("/")

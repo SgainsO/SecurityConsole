@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     MONGODB_STRING: str = os.getenv("MONGODB_URI", "")
-    DATABASE_NAME: str = os.getenv("SENTRY_DATABASE_NAME", "")
+    DATABASE_NAME: str = os.getenv("DATABASE_NAME", "security_console")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 
     
     class Config:

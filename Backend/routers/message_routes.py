@@ -20,6 +20,20 @@ router = APIRouter(prefix="/api/messages", tags=["messages"])
 
 
 def message_helper(message) -> dict:
+    """Convert MongoDB document to MessageResponse dict."""
+    # Get status as string and convert to enum
+    status_value = message.get("status", MessageStatus.SAFE.value)
+    
+    # Convert string to MessageStatus enum if needed
+    if isinstance(status_value, str):
+        try:
+            status = MessageStatus(status_value)
+        except ValueError:
+            # If invalid status, default to SAFE
+            status = MessageStatus.SAFE
+    else:
+        status = status_value
+    
     return {
         "id": str(message["_id"]),
         "employee_id": message["employee_id"],
@@ -27,7 +41,7 @@ def message_helper(message) -> dict:
         "response": message.get("response"),
         "session_id": message.get("session_id"),
         "metadata": message.get("metadata"),
-        "status": message.get("status", MessageStatus.SAFE.value),
+        "status": status,
         "created_at": message["created_at"],
         "updated_at": message["updated_at"],
     }

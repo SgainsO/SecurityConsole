@@ -189,3 +189,153 @@ export async function getStatistics(): Promise<MessageStatistics> {
   return response.json()
 }
 
+// ============== CHAT ENDPOINTS ==============
+
+export interface ChatRequest {
+  employee_id: string
+  message: string
+  session_id?: string
+  metadata?: Record<string, any>
+}
+
+export interface ChatResponse {
+  message_id: string
+  employee_id: string
+  prompt: string
+  response: string
+  status: 'SAFE' | 'FLAG' | 'BLOCKED'
+  session_id?: string
+  created_at: string
+  security_info?: Record<string, any>
+}
+
+// Send a chat message to the LLM
+export async function sendChatMessage(data: ChatRequest): Promise<ChatResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/chat/send`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to send chat message')
+  }
+
+  return response.json()
+}
+
+// Get chat history for a session
+export async function getChatHistory(sessionId: string): Promise<{
+  session_id: string
+  message_count: number
+  messages: Array<{
+    id: string
+    employee_id: string
+    prompt: string
+    response?: string
+    status: string
+    created_at: string
+    metadata?: Record<string, any>
+  }>
+}> {
+  const response = await fetch(`${API_BASE_URL}/api/chat/history/${sessionId}`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch chat history')
+  }
+
+  return response.json()
+}
+
+// ============== CONVERSATION ENDPOINTS ==============
+
+export interface ConversationSummary {
+  session_id: string
+  employee_id: string
+  message_count: number
+  safe_count: number
+  flagged_count: number
+  blocked_count: number
+  first_message_at: string
+  last_message_at: string
+  latest_prompt?: string
+}
+
+export interface ConversationDetail {
+  session_id: string
+  employee_id: string
+  messages: Array<{
+    id: string
+    prompt: string
+    response?: string
+    status: string
+    created_at: string
+    metadata?: Record<string, any>
+  }>
+  statistics: {
+    total_messages: number
+    safe_messages: number
+    flagged_messages: number
+    blocked_messages: number
+    first_message_at: string
+    last_message_at: string
+  }
+}
+
+// Get all conversations with optional filters
+export async function getConversations(params?: {
+  employee_id?: string
+  has_flags?: boolean
+  has_blocks?: boolean
+  skip?: number
+  limit?: number
+}): Promise<ConversationSummary[]> {
+  const queryParams = new URLSearchParams()
+
+  if (params?.employee_id) queryParams.append('employee_id', params.employee_id)
+  if (params?.has_flags !== undefined) queryParams.append('has_flags', params.has_flags.toString())
+  if (params?.has_blocks !== undefined) queryParams.append('has_blocks', params.has_blocks.toString())
+  if (params?.skip) queryParams.append('skip', params.skip.toString())
+  if (params?.limit) queryParams.append('limit', params.limit.toString())
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/conversations/?${queryParams.toString()}`
+  )
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch conversations')
+  }
+
+  return response.json()
+}
+
+// Get detailed conversation by session ID
+export async function getConversationDetail(sessionId: string): Promise<ConversationDetail> {
+  const response = await fetch(`${API_BASE_URL}/api/conversations/${sessionId}`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch conversation detail')
+  }
+
+  return response.json()
+}
+
+// Get all sessions for an employee
+export async function getEmployeeSessions(employeeId: string): Promise<Array<{
+  session_id: string
+  message_count: number
+  last_message_at: string
+  has_flags: boolean
+  has_blocks: boolean
+}>> {
+  const response = await fetch(`${API_BASE_URL}/api/conversations/employee/${employeeId}/sessions`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch employee sessions')
+  }
+
+  return response.json()
+}
+
